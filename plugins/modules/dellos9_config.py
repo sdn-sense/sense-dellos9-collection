@@ -101,11 +101,7 @@ def main():
     if any((module.params['lines'], module.params['src'])):
         if match != 'none':
             config = get_running_config(module)
-            if parents:
-                contents = get_sublevel_config(config, module)
-                config = NetworkConfig(contents=contents, indent=1)
-            else:
-                config = NetworkConfig(contents=config, indent=1)
+            config = NetworkConfig(contents=config, indent=1)
             configobjs = candidate.difference(config, match=match, replace=replace)
         else:
             configobjs = candidate.items
