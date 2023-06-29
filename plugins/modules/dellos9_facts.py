@@ -8,7 +8,7 @@ import traceback
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.six import iteritems
 from ansible.utils.display import Display
-from ansible_collections.sense.dellos9.plugins.module_utils.network.dellos9 import run_commands, PortMapping
+from ansible_collections.sense.dellos9.plugins.module_utils.network.dellos9 import run_commands, PortMapping, normalizedip
 from ansible_collections.sense.dellos9.plugins.module_utils.network.dellos9 import dellos9_argument_spec, check_args
 
 display = Display()
@@ -59,6 +59,76 @@ class Default(FactsBase):
         if match:
             return match.group(1)
         return ""
+
+
+class Routing(FactsBase):
+
+    COMMANDS = [
+        'show running-config',
+    ]
+
+    def populate(self):
+        super(Routing, self).populate()
+        data = self.responses[0].split('\n')
+        self.facts['ipv6'] = []
+        self.getIPv6Routing(data)
+        self.facts['ipv4'] = []
+        self.getIPv4Routing(data)
+
+    def getIPv4Routing(self, data):
+        """Get IPv4 Routing from running config"""
+
+        for inline in data:
+            inline = inline.strip()  # Remove all white spaces
+            # Rule 0: Parses route like: ip route 0.0.0.0/0 192.168.255.254
+            match = re.match(r'ip route (\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}/\d{1,2}) (\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})$', inline)
+            if match:
+                self.facts['ipv4'].append({'to': match.groups()[0], 'from': match.groups()[1]})
+                continue
+            # Rule 1: Parses route like: ip route vrf lhcone 0.0.0.0/0 192.84.86.242
+            match = re.match(r'ip route vrf (\w+) (\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}/\d{1,2}) (\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})$', inline)
+            if match:
+                self.facts['ipv4'].append({'vrf': match.groups()[0], 'to': match.groups()[1], 'from': match.groups()[2]})
+                continue
+            # Rule 2: Parses route like: ip route vrf lhcone 192.84.86.0/24 NULL 0
+            match = re.match(r'ip route vrf (\w+) (\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}/\d{1,2}) (\w+) (\w+)$', inline)
+            if match:
+                self.facts['ipv4'].append({'vrf': match.groups()[0], 'to': match.groups()[1],
+                            'intf': f"{match.groups()[2]} {match.groups()[3]}"})
+                continue
+            # Rule 3: Parses route like: ip route vrf lhcone 192.84.86.0/24 NULL 0 1.2.3.1
+            match = re.match(r'ip route vrf (\w+) (\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}/\d{1,2}) (\w+) (\w+) (\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})$', inline)
+            if match:
+                self.facts['ipv4'].append({'vrf': match.groups()[0], 'to': match.groups()[1],
+                            'intf': f"{match.groups()[2]} {match.groups()[3]}", 'from': match.groups()[4]})
+
+    def getIPv6Routing(self, data):
+        """Get IPv6 Routing from running config"""
+        for inline in data:
+            inline = inline.strip()  # Remove all white spaces
+            # Rule 0: Matches ipv6 route 2605:d9c0:2:11::/64 fd00::3600:1
+            match = re.match(r'ipv6 route ([abcdef0-9:]+/\d{1,3}) ([abcdef0-9:]+)$', inline)
+            if match:
+                self.facts['ipv6'].append({'to': normalizedip(match.groups()[0]), 'from': normalizedip(match.groups()[1])})
+                continue
+            # Rule 1: Matches ipv6 route vrf lhcone ::/0 2605:d9c0:0:1::2
+            match = re.match(r'ipv6 route vrf (\w+) ([abcdef0-9:]+/\d{1,3}) ([abcdef0-9:]+)$', inline)
+            if match:
+                self.facts['ipv6'].append({'vrf': match.groups()[0], 'to': normalizedip(match.groups()[1]),
+                                           'from': normalizedip(match.groups()[2])})
+                continue
+            # Rule 2: Matches ipv6 route vrf lhcone 2605:d9c0::/32 NULL 0
+            match = re.match(r'ipv6 route vrf (\w+) ([abcdef0-9:]+/\d{1,3}) (\w+) (\w+)$', inline)
+            if match:
+                self.facts['ipv6'].append({'vrf': match.groups()[0], 'to': normalizedip(match.groups()[1]),
+                            'intf': f"{match.groups()[2]} {match.groups()[3]}"})
+                continue
+            # Rule 3: Matches ipv6 route vrf lhcone 2605:d9c0::2/128 NULL 0 2605:d9c0:0:1::2
+            match = re.match(r'ipv6 route vrf (\w+) ([abcdef0-9:]+/\d{1,3}) (\w+) (\w+) ([abcdef0-9:]+)$', inline)
+            if match:
+                self.facts['ipv6'].append({'vrf': match.groups()[0], 'to': normalizedip(match.groups()[1]),
+                            'intf': f"{match.groups()[2]} {match.groups()[3]}",
+                            'from': normalizedip(match.groups()[4])})
 
 
 class LLDPInfo(FactsBase):
@@ -277,7 +347,8 @@ class Interfaces(FactsBase):
 
 FACT_SUBSETS = {'default': Default,
                 'interfaces': Interfaces,
-                'lldp': LLDPInfo}
+                'lldp': LLDPInfo,
+                'routing': Routing}
 
 VALID_SUBSETS = frozenset(FACT_SUBSETS.keys())
 

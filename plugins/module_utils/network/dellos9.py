@@ -4,6 +4,7 @@
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 import re
+from ipaddress import ip_address
 from ansible.utils.display import Display
 from ansible.module_utils._text import to_text
 from ansible.module_utils.basic import env_fallback
@@ -96,6 +97,24 @@ def load_config(module, commands):
 
     exec_command(module, 'end')
 
+
+def normalizedip(ipInput):
+    """
+    Normalize IPv6 address. It can have leading 0 or not and both are valid.
+    This function will ensure same format is used.
+    """
+    tmp = ipInput.split('/')
+    ipaddr = None
+    try:
+        ipaddr = ip_address(tmp[0]).compressed
+    except ValueError:
+        ipaddr = tmp[0]
+    if len(tmp) == 2:
+        return f"{ipaddr}/{tmp[1]}"
+    if len(tmp) == 1:
+        return ipaddr
+    # We return what we get here, because it had multiple / (which is not really valid)
+    return ipInput
 
 class PortMapping():
 
