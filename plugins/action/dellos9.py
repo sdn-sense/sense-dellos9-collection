@@ -22,7 +22,6 @@ class ActionModule(ActionNetworkModule):
 
     def run(self, tmp=None, task_vars=None):
         """DellOS9 Ansible Run"""
-
         self._config_module = self._task.action.split('.')[-1] == 'dellos9_config'
         sockPath = None
         persConn = self._play_context.connection.split('.')[-1]

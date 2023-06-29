@@ -3,11 +3,14 @@
 
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+import re
+from ansible.utils.display import Display
 from ansible.module_utils._text import to_text
 from ansible.module_utils.basic import env_fallback
 from ansible.module_utils.connection import exec_command
 from ansible_collections.ansible.netcommon.plugins.module_utils.network.common.utils import to_list, ComplexList
-from ansible_collections.ansible.netcommon.plugins.module_utils.network.common.config import NetworkConfig, ConfigLine
+
+display = Display()
 
 _DEVICE_CONFIGS = {}
 
@@ -34,6 +37,7 @@ dellos9_argument_spec = {
 def check_args(module, warnings):
     """Check args pass"""
     pass
+
 
 def get_config(module, flags=None):
     """Get running config"""
@@ -93,23 +97,156 @@ def load_config(module, commands):
     exec_command(module, 'end')
 
 
-def get_sublevel_config(running_config, module):
-    """Get sublevel config"""
-    contents = []
-    current_config_contents = []
-    running_config = NetworkConfig(contents=running_config, indent=1)
-    obj = running_config.get_object(module.params['parents'])
-    if obj:
-        contents = obj.children
-    contents[:0] = module.params['parents']
+class PortMapping():
 
-    indent = 0
-    for cts in contents:
-        if isinstance(cts, str):
-            current_config_contents.append(cts.rjust(len(cts) + indent, ' '))
-        if isinstance(cts, ConfigLine):
-            current_config_contents.append(cts.raw)
-        indent = 1
-    sublevel_config = '\n'.join(current_config_contents)
+    def __init__(self):
+        self.regexs = [r'^tagged (.+) (.+)',
+                       r'^untagged (.+) (.+)',
+                       r'^channel-member (.+) (.+)',
+                       r'^(Port-channel) (.+)']
 
-    return sublevel_config
+    @staticmethod
+    def _portSplitter(portName, inPorts):
+        """Port splitter for dellos9"""
+        def __identifyStep():
+            if portName == 'fortyGigE':
+                return 4
+            return 1
+
+        def rule0(reMatch):
+            """Rule 0 to split ports to extended list
+            INPUT: ('2,18-21,100,122', ',122', '122', '21')
+            Split by comma, and loop:
+              if no split - add to list
+              if exists - split by dash and check if st < en
+                every step is 1, 40G - is 4"""
+            out = []
+            for vals in reMatch[0].split(','):
+                if '-' in vals:
+                    stVal, enVal = vals.split('-')[0], vals.split('-')[1]
+                    if int(stVal) > int(enVal):
+                        continue
+                    for val in range(int(stVal), int(enVal)+1, __identifyStep()):
+                        out.append(val)
+                else:
+                    out.append(int(vals))
+            return out
+
+        def rule1(reMatch):
+            """Rule 1 to split ports to extended list
+            INPUT: ('1/1-1/2,1/3,1/4,1/10-1/20', ',1/10-1/20', '1/10-1/20', '-1/20')
+            Split by comma and loop:
+            if no -, add to list
+            if - exists - split by dash, split by / and identify which value is diff
+            diff values check if st < en and push to looper;
+            every step is 1, 40G - is 4"""
+            out = []
+            for vals in reMatch[0].split(','):
+                if '-' in vals:
+                    stVal, enVal = vals.split('-')[0].split('/'), vals.split('-')[1].split('/')
+                    mod, modline = None, None
+                    # If first digit not equal - replace first
+                    if stVal[0] != enVal[0] and stVal[1] == enVal[1] and \
+                       int(stVal[0]) < int(enVal[0]):
+                        modline = "%%s/%s" % stVal[1]
+                        mod = 0
+                    # If second digit not equal - replace second
+                    elif stVal[0] == enVal[0] and stVal[1] != enVal[1] and \
+                         int(stVal[1]) < int(enVal[1]):
+                        modline = "%s/%%s" % stVal[0]
+                        mod = 1
+                    if mod and modline:
+                        for val in range(int(stVal[mod]), int(enVal[mod])+1, __identifyStep()):
+                            out.append(modline % val)
+                else:
+                    out.append(vals)
+            return out
+
+        def rule2(reMatch):
+            """Rule 2 to split ports to extended list
+            INPUT ('0', '0-3,11-12,15,56,58-59', ',58-59', '58', '59')
+            Split by comma and loop:
+            if no -, add to list
+            if - exists - split by dash, and check if st < en
+            every step is 1, 40G - is 4"""
+            out = []
+            tmpOut = rule0(tuple([reMatch[1]]))
+            for line in tmpOut:
+                out.append(f"{reMatch[0]}/{line}")
+            return out
+
+        def rule3(reMatch):
+            """Rule 3 to split ports to extended list
+            INPUT ('1/6/1-1/8/1,1/9/1,1/10/1-1/20/1', ',1/10/1-1/20/1', '1/10/1', '1', '10', '1', '1/20/1', '1', '20', '1')
+            Split by comma and loop:
+            if no -, add to list
+            if - exists - split by dash, split by / and identify which value is diff
+            diff values check if st < en and push to looper;
+            Here all step is 1, even 40G is 1;"""
+            out = []
+            for vals in reMatch[0].split(','):
+                if '-' in vals:
+                    stVal, enVal = vals.split('-')[0].split('/'), vals.split('-')[1].split('/')
+                    mod, modline = None, None
+                    # If first digit not equal - replace first
+                    if stVal[0] != enVal[0] and stVal[1] == enVal[1] and \
+                       stVal[2] == enVal[2] and int(stVal[0]) < int(enVal[0]):
+                        modline = "%%s/%s/%s" % (stVal[1], stVal[2])
+                        mod = 0
+                    # If second digit not equal - replace second
+                    elif stVal[0] == enVal[0] and stVal[1] != enVal[1] and \
+                         stVal[2] == enVal[2] and int(stVal[1]) < int(enVal[1]):
+                        modline = "%s/%%s/%s" % (stVal[0], stVal[2])
+                        mod = 1
+                    # If third digit not equal - replace third
+                    elif stVal[0] == enVal[0] and stVal[1] == enVal[1] and \
+                         stVal[2] != enVal[2] and int(stVal[2]) < int(enVal[2]):
+                        modline = "%s/%s/%%s" % (stVal[0], stVal[1])
+                        mod = 2
+                    if mod and modline:
+                        for val in range(int(stVal[mod]), int(enVal[mod])+1, 1):
+                            out.append(modline % val)
+                else:
+                    out.append(vals)
+            return out
+
+
+        # Rule 0: Parses digit or digit group separated with dash.
+        # Can be multiple separated by comma:
+        match = re.match(r'((,*(\d{1,3}-*(\d{1,3})*))+)$', inPorts)
+        if match:
+            return rule0(match.groups())
+        # Rule 1: Parses only this group below, can be multiple separated by comma:
+        # 1/1
+        # 1/1-1/2
+        match = re.match(r'((,*(\d{1,3}/\d{1,3}(-\d{1,3}/\d{1,3})*))+)$', inPorts)
+        if match:
+            return rule1(match.groups())
+        # Rule 2: 0/XX, where XX can be digit or 2 digits separated by dash.
+        # Afterwards joint by comma, digit or 2 digits separated by dash:
+        match = re.match(r'(\d{1,3})/((,*(\d{1,3})-*(\d{1,3})*)+)$', inPorts)
+        if match:
+            return rule2(match.groups())
+        # Rule 3: Parses only this group below, can be multiple separated by comma:
+        # 1/1/1
+        # 1/7/1-1/8/1
+        match = re.match(r'((,*((\d{1,3})/(\d{1,3})/(\d{1,3}))-*((\d{1,3})/(\d{1,3})/(\d{1,3}))*)+)$', inPorts)
+        if match:
+            return rule3(match.groups())
+
+        # If we are here - raise WARNING, and continue. Return empty list
+        #self.logger.debug('WARNING. Line %s %s NOT MATCHED' % (portName, inPorts))
+        return []
+
+    def parseMembers(self, line):
+        """Parse Members of port"""
+        out = []
+        for regex in self.regexs:
+            match = re.search(regex, line)
+            if match:
+                tmpout = self._portSplitter(match.group(1), match.group(2))
+                if not tmpout:
+                    return out
+                for item in tmpout:
+                    out.append(f"{match.group(1)} {item}")
+        return out

@@ -15,6 +15,7 @@ from ansible_collections.ansible.netcommon.plugins.module_utils.network.common.p
 
 display = Display()
 
+
 def toLines(stdout):
     for item in stdout:
         if isinstance(item, string_types):
@@ -23,7 +24,7 @@ def toLines(stdout):
 
 
 def parse_commands(module, warnings):
-    command = ComplexList({'command': {'key':True}, 'prompt': {}, 'answer':{}}, module)
+    command = ComplexList({'command': {'key': True}, 'prompt': {}, 'answer': {}}, module)
     commands = command(module.params['commands'])
     for _index, item in enumerate(commands):
         if module.check_mode and not item['command'].startswith('show'):
@@ -36,12 +37,11 @@ def parse_commands(module, warnings):
 def main():
     """main entry point for module execution
     """
-
     argument_spec = {
-        'commands': {'type': 'list', 'required':True},
-        'wait_for': {'type':'list', 'elements': 'str'},
-        'match': {'default':'all', 'choices': ['all', 'any']},
-        'retries': {'default':10, 'type': 'int'},
+        'commands': {'type': 'list', 'required': True},
+        'wait_for': {'type': 'list', 'elements': 'str'},
+        'match': {'default': 'all', 'choices': ['all', 'any']},
+        'retries': {'default': 10, 'type': 'int'},
         'interval': {'default': 1, 'type': 'int'}}
 
     argument_spec.update(dellos9_argument_spec)
@@ -62,7 +62,7 @@ def main():
     retries = module.params['retries']
     interval = module.params['interval']
     match = module.params['match']
-
+    responses = None
     while retries > 0:
         responses = run_commands(module, commands)
 

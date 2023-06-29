@@ -6,9 +6,12 @@
 import re
 import json
 
+from ansible.utils.display import Display
 from ansible.module_utils._text import to_text, to_bytes
 from ansible.plugins.terminal import TerminalBase
 from ansible.errors import AnsibleConnectionFailure
+
+display = Display()
 
 
 class TerminalModule(TerminalBase):
