@@ -33,34 +33,6 @@ class FactsBase:
         return run_commands(self.module, cmd, check_rc=False)
 
 
-class Default(FactsBase):
-    """
-    Default Class to get basic info.
-    Required params for SENSE:
-    'info': {'macs': ['4c:76:25:e8:44:c0']}
-    """
-    COMMANDS = [
-        'show system',
-    ]
-
-    def populate(self):
-        super(Default, self).populate()
-        data = self.responses[0]
-
-        self.facts['info'] = {'macs': []}
-        systemMac = self.parse_mac(data)
-        if systemMac:
-            self.facts['info']['macs'].append(systemMac)
-
-    @staticmethod
-    def parse_mac(data):
-        """Parse version"""
-        match = re.search(r'^Stack MAC\s*:\s*(.+)', data)
-        if match:
-            return match.group(1)
-        return ""
-
-
 class Routing(FactsBase):
 
     COMMANDS = [
@@ -181,16 +153,17 @@ class LLDPInfo(FactsBase):
                 self.facts['lldp'][entryOut['local_port_id']] = entryOut
 
 
-class Interfaces(FactsBase):
+class Default(FactsBase):
     """All Interfaces Class"""
     COMMANDS = ['show interfaces',
                 'show running-config',
-                'show lldp neighbors detail']
+                'show system']
 
     def populate(self):
-        super(Interfaces, self).populate()
+        super(Default, self).populate()
 
-        self.facts['interfaces'] = {}
+        self.facts.setdefault('info', {'macs': []})
+        self.facts.setdefault('interfaces', {})
         calls = {'description': self.parse_description,
                  'macaddress': self.parse_macaddress,
                  'ipv4': self.parse_ipv4,
@@ -211,10 +184,24 @@ class Interfaces(FactsBase):
                 if tmpOut:
                     intf[key] = tmpOut
             self.facts['interfaces'][intfName] = intf
+            self.storeMacs(intf)
         # Use running config to identify all tagged, untagged vlans and mapping
         self.parseRunningConfig(self.responses[1])
         # Also write running config to output
         self.facts['config'] = self.responses[1]
+
+        systemMac = self.parse_stack_mac(self.responses[2])
+        if systemMac:
+            self.facts['info']['macs'].append(systemMac)
+
+
+    @staticmethod
+    def parse_stack_mac(data):
+        """Parse version"""
+        match = re.search(r'^Stack MAC\s*:\s*(.+)', data)
+        if match:
+            return match.group(1)
+        return ""
 
     def parseRunningConfig(self, data):
         """General Parser to parse ansible config"""
@@ -234,6 +221,14 @@ class Interfaces(FactsBase):
                     if tmpOut and key in self.facts['interfaces']:
                         self.facts['interfaces'][key].setdefault(line.split()[0], [])
                         self.facts['interfaces'][key][line.split()[0]] += tmpOut
+
+    def storeMacs(self, intfdata):
+        """Store Mac inside info for all known device macs"""
+        self.facts.setdefault('info', {'macs': []})
+        if 'macaddress' in intfdata and intfdata['macaddress']:
+            if intfdata['macaddress'] not in self.facts['info']['macs']:
+                display.vvv(str(intfdata))
+                self.facts['info']['macs'].append(intfdata['macaddress'])
 
     @staticmethod
     def parseInterfaces(data):
@@ -267,10 +262,11 @@ class Interfaces(FactsBase):
 
     @staticmethod
     def parse_macaddress(data):
-        match = re.search(r'address is (\S+)', data)
-        if match:
-            if match.group(1) != "not":
-                return match.group(1)
+        for reg in [r'address is (\S+),', r'address is (\S+)']:
+            match = re.search(reg, data)
+            if match:
+                if match.group(1) != "not":
+                    return match.group(1)
 
     @staticmethod
     def parse_ipv4(data):
@@ -346,7 +342,6 @@ class Interfaces(FactsBase):
 
 
 FACT_SUBSETS = {'default': Default,
-                'interfaces': Interfaces,
                 'lldp': LLDPInfo,
                 'routing': Routing}
 
