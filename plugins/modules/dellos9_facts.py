@@ -3,8 +3,11 @@
 
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+from __future__ import (absolute_import, division, print_function)
+
+__metaclass__ = type
+
 import re
-import traceback
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.six import iteritems
 from ansible.utils.display import Display
@@ -66,13 +69,14 @@ class Routing(FactsBase):
             match = re.match(r'ip route vrf (\w+) (\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}/\d{1,2}) (\w+) (\w+)$', inline)
             if match:
                 self.facts['ipv4'].append({'vrf': match.groups()[0], 'to': match.groups()[1],
-                            'intf': f"{match.groups()[2]} {match.groups()[3]}"})
+                                           'intf': f"{match.groups()[2]} {match.groups()[3]}"})
                 continue
             # Rule 3: Parses route like: ip route vrf lhcone 192.84.86.0/24 NULL 0 1.2.3.1
             match = re.match(r'ip route vrf (\w+) (\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}/\d{1,2}) (\w+) (\w+) (\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})$', inline)
             if match:
                 self.facts['ipv4'].append({'vrf': match.groups()[0], 'to': match.groups()[1],
-                            'intf': f"{match.groups()[2]} {match.groups()[3]}", 'from': match.groups()[4]})
+                                           'intf': f"{match.groups()[2]} {match.groups()[3]}",
+                                           'from': match.groups()[4]})
 
     def getIPv6Routing(self, data):
         """Get IPv6 Routing from running config"""
@@ -92,15 +96,17 @@ class Routing(FactsBase):
             # Rule 2: Matches ipv6 route vrf lhcone 2605:d9c0::/32 NULL 0
             match = re.match(r'ipv6 route vrf (\w+) ([abcdef0-9:]+/\d{1,3}) (\w+) (\w+)$', inline)
             if match:
-                self.facts['ipv6'].append({'vrf': match.groups()[0], 'to': normalizedip(match.groups()[1]),
-                            'intf': f"{match.groups()[2]} {match.groups()[3]}"})
+                self.facts['ipv6'].append({'vrf': match.groups()[0],
+                                           'to': normalizedip(match.groups()[1]),
+                                           'intf': f"{match.groups()[2]} {match.groups()[3]}"})
                 continue
             # Rule 3: Matches ipv6 route vrf lhcone 2605:d9c0::2/128 NULL 0 2605:d9c0:0:1::2
             match = re.match(r'ipv6 route vrf (\w+) ([abcdef0-9:]+/\d{1,3}) (\w+) (\w+) ([abcdef0-9:]+)$', inline)
             if match:
-                self.facts['ipv6'].append({'vrf': match.groups()[0], 'to': normalizedip(match.groups()[1]),
-                            'intf': f"{match.groups()[2]} {match.groups()[3]}",
-                            'from': normalizedip(match.groups()[4])})
+                self.facts['ipv6'].append({'vrf': match.groups()[0],
+                                           'to': normalizedip(match.groups()[1]),
+                                           'intf': f"{match.groups()[2]} {match.groups()[3]}",
+                                           'from': normalizedip(match.groups()[4])})
 
 
 class LLDPInfo(FactsBase):
@@ -193,7 +199,6 @@ class Default(FactsBase):
         systemMac = self.parse_stack_mac(self.responses[2])
         if systemMac:
             self.facts['info']['macs'].append(systemMac)
-
 
     @staticmethod
     def parse_stack_mac(data):
@@ -351,62 +356,57 @@ VALID_SUBSETS = frozenset(FACT_SUBSETS.keys())
 def main():
     """main entry point for module execution
     """
-    argument_spec = {'gather_subset': {'default': ['!config'], 'type': 'list'}}
+    argument_spec = {'gather_subset': {'default': [], 'type': 'list'}}
     argument_spec.update(dellos9_argument_spec)
     module = AnsibleModule(argument_spec=argument_spec,
                            supports_check_mode=True)
     gather_subset = module.params['gather_subset']
     runable_subsets = set()
     exclude_subsets = set()
-    try:
-    
-        for subset in gather_subset:
-            if subset == 'all':
-                runable_subsets.update(VALID_SUBSETS)
-                continue
-            if subset.startswith('!'):
-                subset = subset[1:]
-                if subset == 'all':
-                    exclude_subsets.update(VALID_SUBSETS)
-                    continue
-                exclude = True
-            else:
-                exclude = False
-            if subset not in VALID_SUBSETS:
-                module.fail_json(msg='Bad subset')
-            if exclude:
-                exclude_subsets.add(subset)
-            else:
-                runable_subsets.add(subset)
-        if not runable_subsets:
+
+    for subset in gather_subset:
+        if subset == 'all':
             runable_subsets.update(VALID_SUBSETS)
-    
-        runable_subsets.difference_update(exclude_subsets)
-        runable_subsets.add('default')
-    
-        facts = {'gather_subset': [runable_subsets]}
-    
-        instances = []
-        for key in runable_subsets:
-            instances.append(FACT_SUBSETS[key](module))
-    
-        for inst in instances:
-            if inst:
-                inst.populate()
-                facts.update(inst.facts)
-    
-        ansible_facts = {}
-        for key, value in iteritems(facts):
-            key = 'ansible_net_%s' % key
-            ansible_facts[key] = value
-    
-        warnings = []
-        check_args(module, warnings)
-        module.exit_json(ansible_facts=ansible_facts, warnings=warnings)
-    except Exception:
-        tb = traceback.format_exc()
-        display.vvv(tb)
-        module.fail_json(tb)
+            continue
+        if subset.startswith('!'):
+            subset = subset[1:]
+            if subset == 'all':
+                exclude_subsets.update(VALID_SUBSETS)
+                continue
+            exclude = True
+        else:
+            exclude = False
+        if subset not in VALID_SUBSETS:
+            module.fail_json(msg=f'Bad subset. {subset} not available in {VALID_SUBSETS}')
+        if exclude:
+            exclude_subsets.add(subset)
+        else:
+            runable_subsets.add(subset)
+    if not runable_subsets:
+        runable_subsets.update(VALID_SUBSETS)
+
+    runable_subsets.difference_update(exclude_subsets)
+    runable_subsets.add('default')
+
+    facts = {'gather_subset': [runable_subsets]}
+
+    instances = []
+    for key in runable_subsets:
+        instances.append(FACT_SUBSETS[key](module))
+
+    for inst in instances:
+        if inst:
+            inst.populate()
+            facts.update(inst.facts)
+
+    ansible_facts = {}
+    for key, value in iteritems(facts):
+        key = 'ansible_net_%s' % key
+        ansible_facts[key] = value
+
+    warnings = []
+    check_args(module, warnings)
+    module.exit_json(ansible_facts=ansible_facts, warnings=warnings)
 
 
 if __name__ == '__main__':

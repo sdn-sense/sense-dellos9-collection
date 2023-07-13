@@ -1,8 +1,12 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+from __future__ import (absolute_import, division, print_function)
+
+__metaclass__ = type
+
 import re
 from ipaddress import ip_address
 from ansible.utils.display import Display
@@ -116,7 +120,8 @@ def normalizedip(ipInput):
     # We return what we get here, because it had multiple / (which is not really valid)
     return ipInput
 
-class PortMapping():
+
+class PortMapping:
 
     def __init__(self):
         self.regexs = [r'^tagged (.+) (.+)',
@@ -127,6 +132,7 @@ class PortMapping():
     @staticmethod
     def _portSplitter(portName, inPorts):
         """Port splitter for dellos9"""
+
         def __identifyStep():
             if portName == 'fortyGigE':
                 return 4
@@ -145,7 +151,7 @@ class PortMapping():
                     stVal, enVal = vals.split('-')[0], vals.split('-')[1]
                     if int(stVal) > int(enVal):
                         continue
-                    for val in range(int(stVal), int(enVal)+1, __identifyStep()):
+                    for val in range(int(stVal), int(enVal) + 1, __identifyStep()):
                         out.append(val)
                 else:
                     out.append(int(vals))
@@ -166,16 +172,15 @@ class PortMapping():
                     mod, modline = None, None
                     # If first digit not equal - replace first
                     if stVal[0] != enVal[0] and stVal[1] == enVal[1] and \
-                       int(stVal[0]) < int(enVal[0]):
+                            int(stVal[0]) < int(enVal[0]):
                         modline = "%%s/%s" % stVal[1]
                         mod = 0
                     # If second digit not equal - replace second
-                    elif stVal[0] == enVal[0] and stVal[1] != enVal[1] and \
-                         int(stVal[1]) < int(enVal[1]):
+                    elif stVal[0] == enVal[0] and stVal[1] != enVal[1] and int(stVal[1]) < int(enVal[1]):
                         modline = "%s/%%s" % stVal[0]
                         mod = 1
                     if mod and modline:
-                        for val in range(int(stVal[mod]), int(enVal[mod])+1, __identifyStep()):
+                        for val in range(int(stVal[mod]), int(enVal[mod]) + 1, __identifyStep()):
                             out.append(modline % val)
                 else:
                     out.append(vals)
@@ -209,26 +214,25 @@ class PortMapping():
                     mod, modline = None, None
                     # If first digit not equal - replace first
                     if stVal[0] != enVal[0] and stVal[1] == enVal[1] and \
-                       stVal[2] == enVal[2] and int(stVal[0]) < int(enVal[0]):
+                            stVal[2] == enVal[2] and int(stVal[0]) < int(enVal[0]):
                         modline = "%%s/%s/%s" % (stVal[1], stVal[2])
                         mod = 0
                     # If second digit not equal - replace second
                     elif stVal[0] == enVal[0] and stVal[1] != enVal[1] and \
-                         stVal[2] == enVal[2] and int(stVal[1]) < int(enVal[1]):
+                            stVal[2] == enVal[2] and int(stVal[1]) < int(enVal[1]):
                         modline = "%s/%%s/%s" % (stVal[0], stVal[2])
                         mod = 1
                     # If third digit not equal - replace third
                     elif stVal[0] == enVal[0] and stVal[1] == enVal[1] and \
-                         stVal[2] != enVal[2] and int(stVal[2]) < int(enVal[2]):
+                            stVal[2] != enVal[2] and int(stVal[2]) < int(enVal[2]):
                         modline = "%s/%s/%%s" % (stVal[0], stVal[1])
                         mod = 2
                     if mod and modline:
-                        for val in range(int(stVal[mod]), int(enVal[mod])+1, 1):
+                        for val in range(int(stVal[mod]), int(enVal[mod]) + 1, 1):
                             out.append(modline % val)
                 else:
                     out.append(vals)
             return out
-
 
         # Rule 0: Parses digit or digit group separated with dash.
         # Can be multiple separated by comma:
@@ -254,7 +258,7 @@ class PortMapping():
             return rule3(match.groups())
 
         # If we are here - raise WARNING, and continue. Return empty list
-        #self.logger.debug('WARNING. Line %s %s NOT MATCHED' % (portName, inPorts))
+        # self.logger.debug('WARNING. Line %s %s NOT MATCHED' % (portName, inPorts))
         return []
 
     def parseMembers(self, line):

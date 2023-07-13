@@ -3,6 +3,13 @@
 
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+from __future__ import (absolute_import, division, print_function)
+from ansible.module_utils.basic import AnsibleModule
+from ansible.utils.display import Display
+from ansible_collections.sense.dellos9.plugins.module_utils.network.dellos9 import get_config
+from ansible_collections.sense.dellos9.plugins.module_utils.network.dellos9 import dellos9_argument_spec, check_args
+from ansible_collections.sense.dellos9.plugins.module_utils.network.dellos9 import load_config, run_commands
+from ansible_collections.ansible.netcommon.plugins.module_utils.network.common.config import NetworkConfig, dumps
 __metaclass__ = type
 
 
@@ -14,12 +21,6 @@ ANSIBLE_METADATA = {'metadata_version': '1.1',
 DOCUMENTATION = ""
 EXAMPLES = ""
 RETURN = ""
-from ansible.module_utils.basic import AnsibleModule
-from ansible.utils.display import Display
-from ansible_collections.sense.dellos9.plugins.module_utils.network.dellos9 import get_config
-from ansible_collections.sense.dellos9.plugins.module_utils.network.dellos9 import dellos9_argument_spec, check_args
-from ansible_collections.sense.dellos9.plugins.module_utils.network.dellos9 import load_config, run_commands
-from ansible_collections.ansible.netcommon.plugins.module_utils.network.common.config import NetworkConfig, dumps
 
 
 display = Display()
