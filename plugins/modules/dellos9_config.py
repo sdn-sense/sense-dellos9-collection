@@ -10,6 +10,7 @@ from ansible_collections.sense.dellos9.plugins.module_utils.network.dellos9 impo
 from ansible_collections.sense.dellos9.plugins.module_utils.network.dellos9 import dellos9_argument_spec, check_args
 from ansible_collections.sense.dellos9.plugins.module_utils.network.dellos9 import load_config, run_commands
 from ansible_collections.ansible.netcommon.plugins.module_utils.network.common.config import NetworkConfig, dumps
+from ansible_collections.sense.dellos9.plugins.module_utils.runwrapper import functionwrapper
 __metaclass__ = type
 
 
@@ -25,7 +26,7 @@ RETURN = ""
 
 display = Display()
 
-
+@functionwrapper
 def get_candidate(module):
     candidate = NetworkConfig(indent=1)
     if module.params['src']:
@@ -41,14 +42,14 @@ def get_candidate(module):
             candidate.add(module.params['lines'], parents=parents)
     return candidate
 
-
+@functionwrapper
 def get_running_config(module):
     contents = module.params['config']
     if not contents:
         contents = get_config(module)
     return contents
 
-
+@functionwrapper
 def main():
     backup_spec = dict(
         filename=dict(),

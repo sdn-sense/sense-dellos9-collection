@@ -14,6 +14,7 @@ from ansible.module_utils._text import to_text
 from ansible.module_utils.basic import env_fallback
 from ansible.module_utils.connection import exec_command
 from ansible_collections.ansible.netcommon.plugins.module_utils.network.common.utils import to_list, ComplexList
+from ansible_collections.sense.dellos9.plugins.module_utils.runwrapper import functionwrapper, classwrapper
 
 display = Display()
 
@@ -38,12 +39,12 @@ dellos9_argument_spec = {
     'provider': {'type': 'dict', 'options': dellos9_provider_spec}
 }
 
-
+@functionwrapper
 def check_args(module, warnings):
     """Check args pass"""
     pass
 
-
+@functionwrapper
 def get_config(module, flags=None):
     """Get running config"""
     flags = [] if flags is None else flags
@@ -61,7 +62,7 @@ def get_config(module, flags=None):
         _DEVICE_CONFIGS[cmd] = cfg
         return cfg
 
-
+@functionwrapper
 def to_commands(module, commands):
     """Transform commands"""
     spec = {
@@ -72,7 +73,7 @@ def to_commands(module, commands):
     transform = ComplexList(spec, module)
     return transform(commands)
 
-
+@functionwrapper
 def run_commands(module, commands, check_rc=True):
     """Run Commands"""
     responses = []
@@ -85,7 +86,7 @@ def run_commands(module, commands, check_rc=True):
         responses.append(to_text(out, errors='surrogate_or_strict'))
     return responses
 
-
+@functionwrapper
 def load_config(module, commands):
     """Load config"""
     ret, _out, err = exec_command(module, 'configure terminal')
@@ -101,7 +102,7 @@ def load_config(module, commands):
 
     exec_command(module, 'end')
 
-
+@functionwrapper
 def normalizedip(ipInput):
     """
     Normalize IPv6 address. It can have leading 0 or not and both are valid.
@@ -120,7 +121,7 @@ def normalizedip(ipInput):
     # We return what we get here, because it had multiple / (which is not really valid)
     return ipInput
 
-
+@classwrapper
 class PortMapping:
 
     def __init__(self):

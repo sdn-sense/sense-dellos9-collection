@@ -3,20 +3,20 @@
 
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
-from __future__ import (absolute_import, division, print_function)
-
 __metaclass__ = type
 
 import re
+import traceback
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.six import iteritems
 from ansible.utils.display import Display
 from ansible_collections.sense.dellos9.plugins.module_utils.network.dellos9 import run_commands, PortMapping, normalizedip
 from ansible_collections.sense.dellos9.plugins.module_utils.network.dellos9 import dellos9_argument_spec, check_args
+from ansible_collections.sense.dellos9.plugins.module_utils.runwrapper import functionwrapper, classwrapper
 
 display = Display()
 
-
+@classwrapper
 class FactsBase:
     """Base class for Facts"""
 
@@ -35,7 +35,7 @@ class FactsBase:
         """Run commands"""
         return run_commands(self.module, cmd, check_rc=False)
 
-
+@classwrapper
 class Routing(FactsBase):
 
     COMMANDS = [
@@ -108,7 +108,7 @@ class Routing(FactsBase):
                                            'intf': f"{match.groups()[2]} {match.groups()[3]}",
                                            'from': normalizedip(match.groups()[4])})
 
-
+@classwrapper
 class LLDPInfo(FactsBase):
     """LLDP Information and link mapping"""
     COMMANDS = ['show lldp neighbors detail']
@@ -158,7 +158,7 @@ class LLDPInfo(FactsBase):
             if 'local_port_id' in entryOut:
                 self.facts['lldp'][entryOut['local_port_id']] = entryOut
 
-
+@classwrapper
 class Default(FactsBase):
     """All Interfaces Class"""
     COMMANDS = ['show interfaces',
@@ -352,7 +352,7 @@ FACT_SUBSETS = {'default': Default,
 
 VALID_SUBSETS = frozenset(FACT_SUBSETS.keys())
 
-
+@functionwrapper
 def main():
     """main entry point for module execution
     """
@@ -396,8 +396,12 @@ def main():
 
     for inst in instances:
         if inst:
-            inst.populate()
-            facts.update(inst.facts)
+            try:
+                inst.populate()
+                facts.update(inst.facts)
+            except Exception:
+                display.vvv(traceback.format_exc())
+                raise Exception(traceback.format_exc())
 
     ansible_facts = {}
     for key, value in iteritems(facts):
