@@ -92,7 +92,7 @@ class TestDellOS9Facts(TestDellOS9Module):
         for key, vals in test_data.items():
             self.assertIn(key, ansible_facts['ansible_net_interfaces'])
             for subkey, subval in vals.items():
-                self.assertEquals(subval, ansible_facts['ansible_net_interfaces'][key][subkey])
+                self.assertEqual(subval, ansible_facts['ansible_net_interfaces'][key][subkey])
 
     def test_dellos9_facts_gather_subset_routing(self):
         set_module_args({'gather_subset': 'routing'})
@@ -108,9 +108,9 @@ class TestDellOS9Facts(TestDellOS9Module):
                                             'to': '2605:d9c0:2::/48',
                                             'vrf': 'lhcone'}]}
         self.assertIn('ansible_net_ipv4', ansible_facts)
-        self.assertEquals(test_data['ansible_net_ipv4'], ansible_facts['ansible_net_ipv4'])
+        self.assertEqual(test_data['ansible_net_ipv4'], ansible_facts['ansible_net_ipv4'])
         self.assertIn('ansible_net_ipv6', ansible_facts)
-        self.assertEquals(test_data['ansible_net_ipv6'], ansible_facts['ansible_net_ipv6'])
+        self.assertEqual(test_data['ansible_net_ipv6'], ansible_facts['ansible_net_ipv6'])
 
     def test_dellos9_facts_gather_subset_lldp(self):
         set_module_args({'gather_subset': 'lldp'})
@@ -143,4 +143,4 @@ class TestDellOS9Facts(TestDellOS9Module):
         for key, vals in test_data.items():
             self.assertIn(key, ansible_facts['ansible_net_lldp'])
             for subkey, subval in vals.items():
-                self.assertEquals(subval, ansible_facts['ansible_net_lldp'][key][subkey])
+                self.assertEqual(subval, ansible_facts['ansible_net_lldp'][key][subkey])
