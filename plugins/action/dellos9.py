@@ -1,7 +1,14 @@
 # -*- coding: utf-8 -*-
+"""Action Plugins
+Copyright: Contributors to the SENSE Project
+GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
-# Copyright: Contributors to the Ansible project
-# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+Title                   : sdn-sense/sense-dellos9-collection
+Author                  : Justas Balcas
+Email                   : juztas (at) gmail.com
+@Copyright              : General Public License v3.0+
+Date                    : 2023/11/05
+"""
 import copy
 import sys
 

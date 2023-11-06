@@ -1,9 +1,16 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+"""Dell OS 9 Terminal Module
+Copyright: Contributors to the SENSE Project
+GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
+Title                   : sdn-sense/sense-dellos9-collection
+Author                  : Justas Balcas
+Email                   : juztas (at) gmail.com
+@Copyright              : General Public License v3.0+
+Date                    : 2023/11/05
+"""
 import json
-# Copyright: Contributors to the Ansible project
-# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 import re
 
 from ansible.errors import AnsibleConnectionFailure
