@@ -48,13 +48,15 @@ class FactsBase:
 
 @classwrapper
 class Routing(FactsBase):
+    """Routing Class to parse routing details"""
 
     COMMANDS = [
         "show running-config",
     ]
 
     def populate(self):
-        super(Routing, self).populate()
+        """Populate facts"""
+        super().populate()
         data = self.responses[0].split("\n")
         self.facts["ipv6"] = []
         self.getIPv6Routing(data)
@@ -184,7 +186,7 @@ class LLDPInfo(FactsBase):
     COMMANDS = ["show lldp neighbors detail"]
 
     def populate(self):
-        super(LLDPInfo, self).populate()
+        super().populate()
         data = self.responses[0]
         self.facts["lldp"] = {}
         self.getlldpneighbors(data)
@@ -240,7 +242,7 @@ class Default(FactsBase):
     COMMANDS = ["show interfaces", "show running-config", "show system"]
 
     def populate(self):
-        super(Default, self).populate()
+        super().populate()
 
         self.facts.setdefault("info", {"macs": []})
         self.facts.setdefault("interfaces", {})
@@ -261,8 +263,8 @@ class Default(FactsBase):
         interfaceData = self.parseInterfaces(self.responses[0])
         for intfName, intfDict in interfaceData.items():
             intf = {}
-            for key in calls:
-                tmpOut = calls.get(key)(intfDict)
+            for key, call in calls.items():
+                tmpOut = call(intfDict)
                 if tmpOut:
                     intf[key] = tmpOut
             self.facts["interfaces"][intfName] = intf
@@ -278,11 +280,11 @@ class Default(FactsBase):
 
     @staticmethod
     def parse_stack_mac(data):
-        """Parse version"""
+        """Parse Stack MAC Address"""
         match = re.search(r"^Stack MAC\s*:\s*(.+)", data)
         if match:
             return match.group(1)
-        return ""
+        return None
 
     def parseRunningConfig(self, data):
         """General Parser to parse ansible config"""
@@ -308,7 +310,6 @@ class Default(FactsBase):
         self.facts.setdefault("info", {"macs": []})
         if "macaddress" in intfdata and intfdata["macaddress"]:
             if intfdata["macaddress"] not in self.facts["info"]["macs"]:
-                display.vvv(str(intfdata))
                 self.facts["info"]["macs"].append(intfdata["macaddress"])
 
     @staticmethod
@@ -332,88 +333,109 @@ class Default(FactsBase):
                     key = match.group(0)
                     parsed[key] = line
                 else:
-                    parsed[key] += "\n%s" % line
+                    parsed[key] += f"\n{line}"
         return parsed
 
     @staticmethod
     def parse_description(data):
+        """Parse Port description"""
         match = re.search(r"Description: (.+)$", data, re.M)
         if match:
             return match.group(1)
+        return None
 
     @staticmethod
     def parse_macaddress(data):
+        """Parse Port Mac Address"""
         for reg in [r"address is (\S+),", r"address is (\S+)"]:
             match = re.search(reg, data)
             if match:
                 if match.group(1) != "not":
                     return match.group(1)
+        return None
 
     @staticmethod
     def parse_ipv4(data):
+        """Parse IPv4 address of Port"""
         match = re.search(r"Internet address is (\S+)", data)
         if match:
             if match.group(1) != "not":
                 addr, masklen = match.group(1).split("/")
                 return [dict(address=addr, masklen=int(masklen))]
+        return None
 
     @staticmethod
     def parse_ipv6(data):
+        """Parse IPv6 address of Port"""
         match = re.search(r"Global IPv6 address: (\S+)", data)
         if match:
             if match.group(1) != "not":
                 addr, masklen = match.group(1).split("/")
                 return [dict(address=addr, masklen=int(masklen))]
+        return None
 
     @staticmethod
     def parse_mtu(data):
+        """Parse MTU of Port"""
         match = re.search(r"MTU (\d+)", data)
         if match:
             return int(match.group(1))
+        return None
 
     @staticmethod
     def parse_bandwidth(data):
+        """Parse Line Speed of Port"""
         match = re.search(r"LineSpeed (\d+)", data)
         if match:
             return int(match.group(1))
+        return None
 
     @staticmethod
     def parse_duplex(data):
+        """Parse Duplex mode of Port"""
         match = re.search(r"(\w+) duplex", data, re.M)
         if match:
             return match.group(1)
+        return None
 
     @staticmethod
     def parse_mediatype(data):
+        """Parse media type of Port"""
         media = re.search(r"(.+) media present, (.+)", data, re.M)
         if media:
             match = re.search(r"type is (.+)$", media.group(0), re.M)
             return match.group(1)
+        return None
 
     @staticmethod
     def parse_type(data):
+        """Parse Hardware type of Port"""
         match = re.search(r"Hardware is (.+),", data, re.M)
         if match:
             return match.group(1)
+        return None
 
     @staticmethod
     def parse_lineprotocol(data):
+        """Parse Line Protocol status"""
         match = re.search(r"line protocol is (\w+[ ]?\w*)\(?.*\)?$", data, re.M)
         if match:
             return match.group(1)
+        return None
 
     @staticmethod
     def parse_operstatus(data):
+        """Parse Operational Status of Port"""
         match = re.search(r"^(?:.+) is (.+),", data, re.M)
         if match:
             return match.group(1)
+        return None
 
     @staticmethod
     def parse_members(data):
+        """Parse Member of PortChannel"""
         keys = {"Hu": "hundredGigE", "Fo": "fortyGigE", "Te": "TenGigabitEthernet"}
-        match = re.search(
-            r"^Members in this channel: +([a-zA-Z0-9 /\(\)]+)$", data, re.M
-        )
+        match = re.search(r"^Members in this channel: +([a-zA-Z0-9 /()]+)$", data, re.M)
         out = []
         if match:
             allintf = (
@@ -482,14 +504,13 @@ def main():
             try:
                 inst.populate()
                 facts.update(inst.facts)
-            except Exception:
-                display.vvv(traceback.format_exc())
-                raise Exception(traceback.format_exc())
+            except Exception as ex:
+                display.warning(traceback.format_exc())
+                raise Exception(traceback.format_exc()) from ex
 
     ansible_facts = {}
     for key, value in iteritems(facts):
-        key = "ansible_net_%s" % key
-        ansible_facts[key] = value
+        ansible_facts[f"ansible_net_{key}"] = value
 
     warnings = []
     check_args(module, warnings)

@@ -63,7 +63,7 @@ class ActionModule(ActionNetworkModule):
                 plc.become_method = "enable"
             plc.become_pass = provider["auth_pass"]
 
-            display.vvv("using connection plugin %s" % plc.connection, plc.remote_addr)
+            display.vvv(f"using connection plugin {plc.connection}", plc.remote_addr)
             connection = self._shared_loader_obj.connection_loader.get(
                 "persistent", plc, sys.stdin
             )
@@ -72,7 +72,7 @@ class ActionModule(ActionNetworkModule):
             )
 
             sockPath = connection.run()
-            display.vvvv("socket_path: %s" % sockPath, plc.remote_addr)
+            display.vvvv(f"socket_path: {sockPath}", plc.remote_addr)
             if not sockPath:
                 return {
                     "failed": True,
@@ -91,5 +91,5 @@ class ActionModule(ActionNetworkModule):
             conn.send_command("exit")
             out = conn.get_prompt()
 
-        result = super(ActionModule, self).run(task_vars=task_vars)
+        result = super().run(task_vars=task_vars)
         return result

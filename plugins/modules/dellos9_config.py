@@ -41,11 +41,12 @@ display = Display()
 
 @functionwrapper
 def get_candidate(module):
+    """Get candidate commands"""
     candidate = NetworkConfig(indent=1)
     if module.params["src"]:
         candidate.load(module.params["src"])
     elif module.params["lines"]:
-        parents = module.params["parents"] or list()
+        parents = module.params["parents"] or []
         commands = module.params["lines"][0]
         if (isinstance(commands, dict)) and (isinstance(commands["command"], list)):
             candidate.add(commands["command"], parents=parents)
@@ -58,6 +59,7 @@ def get_candidate(module):
 
 @functionwrapper
 def get_running_config(module):
+    """Get running config"""
     contents = module.params["config"]
     if not contents:
         contents = get_config(module)
@@ -66,7 +68,8 @@ def get_running_config(module):
 
 @functionwrapper
 def main():
-    backup_spec = dict(filename=dict(), dir_path=dict(type="path"))
+    """Main call called by Ansible to execute config"""
+    backup_spec = dict(filename={}, dir_path=dict(type="path"))
     argument_spec = dict(
         lines=dict(aliases=["commands"], type="list"),
         parents=dict(type="list"),
@@ -77,7 +80,7 @@ def main():
         replace=dict(default="line", choices=["line", "block"]),
         update=dict(choices=["merge", "check"], default="merge"),
         save=dict(type="bool", default=False),
-        config=dict(),
+        config={},
         backup=dict(type="bool", default=False),
         backup_options=dict(type="dict", options=backup_spec),
     )
@@ -91,12 +94,10 @@ def main():
         supports_check_mode=True,
     )
 
-    parents = module.params["parents"] or list()
-
     match = module.params["match"]
     replace = module.params["replace"]
 
-    warnings = list()
+    warnings = []
     check_args(module, warnings)
 
     result = dict(changed=False, saved=False, warnings=warnings)
@@ -106,7 +107,6 @@ def main():
     if module.params["backup"]:
         if not module.check_mode:
             result["__backup__"] = get_config(module)
-    commands = list()
 
     if any((module.params["lines"], module.params["src"])):
         if match != "none":

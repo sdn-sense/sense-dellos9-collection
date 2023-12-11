@@ -80,7 +80,6 @@ class TerminalModule(TerminalBase):
         opportunity to clean up any terminal resources before the shell is
         actually closed
         """
-        pass
 
     def on_become(self, passwd=None):
         """Called when privilege escalation is requested

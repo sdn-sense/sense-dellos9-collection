@@ -59,7 +59,6 @@ dellos9_argument_spec = {"provider": {"type": "dict", "options": dellos9_provide
 @functionwrapper
 def check_args(module, warnings):
     """Check args pass"""
-    pass
 
 
 @functionwrapper
@@ -150,6 +149,7 @@ def normalizedip(ipInput):
 
 @classwrapper
 class PortMapping:
+    """Get Port Mappings"""
     def __init__(self):
         self.regexs = [
             r"^tagged (.+) (.+)",
@@ -207,7 +207,7 @@ class PortMapping:
                         and stVal[1] == enVal[1]
                         and int(stVal[0]) < int(enVal[0])
                     ):
-                        modline = "%%s/%s" % stVal[1]
+                        modline = f"%s/{stVal[1]}"
                         mod = 0
                     # If second digit not equal - replace second
                     elif (
@@ -215,7 +215,7 @@ class PortMapping:
                         and stVal[1] != enVal[1]
                         and int(stVal[1]) < int(enVal[1])
                     ):
-                        modline = "%s/%%s" % stVal[0]
+                        modline = f"{stVal[0]}/%s"
                         mod = 1
                     if mod and modline:
                         for val in range(
@@ -261,7 +261,7 @@ class PortMapping:
                         and stVal[2] == enVal[2]
                         and int(stVal[0]) < int(enVal[0])
                     ):
-                        modline = "%%s/%s/%s" % (stVal[1], stVal[2])
+                        modline = f"%s/{stVal[1]}/{stVal[2]}"
                         mod = 0
                     # If second digit not equal - replace second
                     elif (
@@ -270,7 +270,7 @@ class PortMapping:
                         and stVal[2] == enVal[2]
                         and int(stVal[1]) < int(enVal[1])
                     ):
-                        modline = "%s/%%s/%s" % (stVal[0], stVal[2])
+                        modline = f"{stVal[0]}/%s/{stVal[2]}"
                         mod = 1
                     # If third digit not equal - replace third
                     elif (
@@ -279,7 +279,7 @@ class PortMapping:
                         and stVal[2] != enVal[2]
                         and int(stVal[2]) < int(enVal[2])
                     ):
-                        modline = "%s/%s/%%s" % (stVal[0], stVal[1])
+                        modline = f"{stVal[0]}/{stVal[1]}/%s"
                         mod = 2
                     if mod and modline:
                         for val in range(int(stVal[mod]), int(enVal[mod]) + 1, 1):
