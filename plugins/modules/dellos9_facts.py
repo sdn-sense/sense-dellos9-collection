@@ -320,20 +320,14 @@ class Default(FactsBase):
         interface_start = True
         key = None
         for line in data.split("\n"):
-            if interface_start:
-                newline_count = 0
             if len(line) == 0:
-                newline_count += 1
-                if newline_count == 2:
-                    interface_start = True
-            else:
-                match = re.match(r"^(\S+) (\S+)", line)
-                if match and interface_start:
-                    interface_start = False
-                    key = match.group(0)
-                    parsed[key] = line
-                else:
-                    parsed[key] += f"\n{line}"
+                continue
+            match = re.match(r"^(.*) is (.*), line protocol is (.*)", line)
+            if match:
+                key = match.group(1)
+                parsed[key] = line
+            elif key:
+                parsed[key] += f"\n{line}"
         return parsed
 
     @staticmethod
