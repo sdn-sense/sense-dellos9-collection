@@ -288,22 +288,32 @@ class Default(FactsBase):
 
     def parseRunningConfig(self, data):
         """General Parser to parse ansible config"""
-        portMapper = PortMapping()
+        calls = {
+            "tagged": self.parse_tagged,
+            "untagged": self.parse_untagged,
+            "portmode": self.parse_portmode,
+            "switchport": self.parse_switchport,
+            "spanning-tree": self.parse_spanning_tree,
+            "ip_vrf": self.parse_ip_vrf
+        }
         interfaceSt = False
-        key = None
+        intfKey = None
         for line in data.split("\n"):
             line = line.strip()  # Remove all white spaces
             if line == "!" and interfaceSt:
                 interfaceSt = False  # This means interface ended!
             elif line.startswith("interface"):
                 interfaceSt = True
-                key = line[10:]
-            elif interfaceSt:
-                if line.startswith("tagged") or line.startswith("untagged"):
-                    tmpOut = portMapper.parseMembers(line)
-                    if tmpOut and key in self.facts["interfaces"]:
-                        self.facts["interfaces"][key].setdefault(line.split()[0], [])
-                        self.facts["interfaces"][key][line.split()[0]] += tmpOut
+                intfKey = line[10:]
+            elif interfaceSt and intfKey in self.facts["interfaces"]:
+                for key, call in calls.items():
+                    tmpOut = call(line)
+                    if tmpOut and isinstance(tmpOut, list):
+                        self.facts["interfaces"][intfKey].setdefault(key, [])
+                        self.facts["interfaces"][intfKey][key] += tmpOut
+                    elif tmpOut and isinstance(tmpOut, str):
+                        self.facts["interfaces"][intfKey].setdefault(key, "")
+                        self.facts["interfaces"][intfKey][key] = tmpOut
 
     def storeMacs(self, intfdata):
         """Store Mac inside info for all known device macs"""
@@ -316,8 +326,6 @@ class Default(FactsBase):
     def parseInterfaces(data):
         """Parse interfaces from output"""
         parsed = {}
-        newline_count = 0
-        interface_start = True
         key = None
         for line in data.split("\n"):
             if len(line) == 0:
@@ -329,6 +337,58 @@ class Default(FactsBase):
             elif key:
                 parsed[key] += f"\n{line}"
         return parsed
+
+    @staticmethod
+    def parse_tagged(data):
+        """Parse Tagged Vlans"""
+        tmpOut = []
+        if data.startswith("tagged"):
+            portMapper = PortMapping()
+            tmpOut = portMapper.parseMembers(data)
+        return tmpOut
+
+    @staticmethod
+    def parse_untagged(data):
+        """Parse Untagged Vlans"""
+        tmpOut = []
+        if data.startswith("untagged"):
+            portMapper = PortMapping()
+            tmpOut = portMapper.parseMembers(data)
+        return tmpOut
+
+    @staticmethod
+    def parse_portmode(data):
+        """Parse Portmode"""
+        tmpOut = ""
+        if data.startswith("portmode "):
+            tmpOut = data[9:]
+        return tmpOut
+
+    @staticmethod
+    def parse_switchport(data):
+        """Parse Switchport"""
+        tmpOut = ""
+        if data == 'switchport':
+            tmpOut = 'yes'
+        return tmpOut
+
+    @staticmethod
+    def parse_spanning_tree(data):
+        """Parse spanning tree"""
+        tmpOut = []
+        if data.startswith('no spanning-tree'):
+            tmpOut = ["no"]
+        elif data.startswith('spanning-tree'):
+            tmpOut = [data[14:]]
+        return tmpOut
+
+    @staticmethod
+    def parse_ip_vrf(data):
+        """Parse ip vrf"""
+        tmpOut = ""
+        if data.startswith('ip vrf'):
+            tmpOut = data[7:]
+        return tmpOut
 
     @staticmethod
     def parse_description(data):
