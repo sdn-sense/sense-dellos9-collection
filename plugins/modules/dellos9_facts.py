@@ -249,8 +249,6 @@ class Default(FactsBase):
         calls = {
             "description": self.parse_description,
             "macaddress": self.parse_macaddress,
-            "ipv4": self.parse_ipv4,
-            "ipv6": self.parse_ipv6,
             "mtu": self.parse_mtu,
             "bandwidth": self.parse_bandwidth,
             "mediatype": self.parse_mediatype,
@@ -262,13 +260,17 @@ class Default(FactsBase):
         }
         interfaceData = self.parseInterfaces(self.responses[0])
         for intfName, intfDict in interfaceData.items():
-            intf = {}
             for key, call in calls.items():
                 tmpOut = call(intfDict)
                 if tmpOut:
-                    intf[key] = tmpOut
-            self.facts["interfaces"][intfName] = intf
-            self.storeMacs(intf)
+                    self.facts["interfaces"].setdefault(intfName, {})
+                    if key in self.facts["interfaces"][intfName] and tmpOut not in self.facts["interfaces"][intfName]:
+                        # No point to repeat and add same entry
+                        # This can mainly happen for ipv4/6 parsing
+                        self.facts["interfaces"][intfName][key] = tmpOut
+                    else:
+                        self.facts["interfaces"][intfName][key] = tmpOut
+            self.storeMacs(self.facts["interfaces"].get(intfName, {}))
         # Use running config to identify all tagged, untagged vlans and mapping
         self.parseRunningConfig(self.responses[1])
         # Also write running config to output
@@ -294,7 +296,9 @@ class Default(FactsBase):
             "portmode": self.parse_portmode,
             "switchport": self.parse_switchport,
             "spanning-tree": self.parse_spanning_tree,
-            "ip_vrf": self.parse_ip_vrf
+            "ip_vrf": self.parse_ip_vrf,
+            "ipv4": self.parse_ipv4,
+            "ipv6": self.parse_ipv6,
         }
         interfaceSt = False
         intfKey = None
@@ -310,7 +314,10 @@ class Default(FactsBase):
                     tmpOut = call(line)
                     if tmpOut and isinstance(tmpOut, list):
                         self.facts["interfaces"][intfKey].setdefault(key, [])
-                        self.facts["interfaces"][intfKey][key] += tmpOut
+                        if tmpOut not in self.facts["interfaces"][intfKey][key]:
+                            # No point to repeat and add same entry
+                            # This can mainly happen for ipv4/6 parsing
+                            self.facts["interfaces"][intfKey][key] += tmpOut
                     elif tmpOut and isinstance(tmpOut, str):
                         self.facts["interfaces"][intfKey].setdefault(key, "")
                         self.facts["interfaces"][intfKey][key] = tmpOut
@@ -360,7 +367,7 @@ class Default(FactsBase):
     def parse_portmode(data):
         """Parse Portmode"""
         tmpOut = ""
-        if data.startswith("portmode "):
+        if data.startswith("portmode"):
             tmpOut = data[9:]
         return tmpOut
 
@@ -416,7 +423,10 @@ class Default(FactsBase):
             if match.group(1) != "not":
                 addr, masklen = match.group(1).split("/")
                 return [dict(address=addr, masklen=int(masklen))]
-        return None
+        match = re.search(r"ip address ([0-9.]*)/([0-9]{1,2}).*", data)
+        if match:
+            return [dict(address=match.group(1), masklen=int(match.group(2)))]
+        return []
 
     @staticmethod
     def parse_ipv6(data):
@@ -426,7 +436,10 @@ class Default(FactsBase):
             if match.group(1) != "not":
                 addr, masklen = match.group(1).split("/")
                 return [dict(address=addr, masklen=int(masklen))]
-        return None
+        match = re.search(r"ipv6 address ([0-9abcdef:]*)/([0-9]{1,3}).*", data)
+        if match:
+            return [dict(address=match.group(1), masklen=int(match.group(2)))]
+        return []
 
     @staticmethod
     def parse_mtu(data):
