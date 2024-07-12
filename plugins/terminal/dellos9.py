@@ -16,8 +16,9 @@ import re
 from ansible.errors import AnsibleConnectionFailure
 from ansible.module_utils._text import to_bytes, to_text
 from ansible.plugins.terminal import TerminalBase
+from ansible_collections.sense.dellos9.plugins.module_utils.runwrapper import classwrapper
 
-
+@classwrapper
 class TerminalModule(TerminalBase):
     """
     Terminal Module to control cli, prompt, shell, become
