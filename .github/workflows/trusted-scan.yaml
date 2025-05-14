@@ -12,6 +12,9 @@ on:
       AIAPIURL:
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   scan:
     runs-on: ubuntu-latest
