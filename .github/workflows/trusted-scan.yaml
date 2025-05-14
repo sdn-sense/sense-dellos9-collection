@@ -14,21 +14,19 @@ on:
 
 permissions:
   contents: read
+  security-events: write
 
 jobs:
   scan:
     runs-on: ubuntu-latest
+    outputs:
+      leak_status: ${{ steps.set-output.outputs.leak_status }}
 
     steps:
     - name: Checkout PR source
       uses: actions/checkout@v3
       with:
         ref: ${{ github.event.pull_request.head.sha }}
-
-    - name: Debug changed_files input
-      run: |
-        echo "Raw changed_files input:"
-        echo "${{ inputs.changed_files }}"
 
     - name: Write file list
       run: |
@@ -41,7 +39,6 @@ jobs:
         if [ ! -f .leakignore ]; then
           echo ".leakignore not found in PR; trying base branch..."
           git fetch origin ${{ github.event.pull_request.base.ref }}
-
           if git ls-tree -r origin/${{ github.event.pull_request.base.ref }} --name-only | grep -q '^.leakignore$'; then
             git show origin/${{ github.event.pull_request.base.ref }}:.leakignore > .leakignore
             echo "Loaded .leakignore from base branch"
@@ -53,39 +50,24 @@ jobs:
 
     - name: Load .leakignore patterns
       run: |
-        if [ -f .leakignore ]; then
-          IGNORE=$(jq -Rs . < .leakignore)
-        else
-          IGNORE="\"\""
-        fi
-        echo "Here is ignored passwords: $IGNORE"
+        IGNORE=$(jq -Rs . < .leakignore)
         echo "IGNORE=$IGNORE" >> $GITHUB_ENV
 
     - name: Analyze each file
       env:
         AIAPIKEY: ${{ secrets.AIAPIKEY }}
         AIAPIURL: ${{ secrets.AIAPIURL }}
+        IGNORE: ${{ env.IGNORE }}
       run: |
         set -euo pipefail
-        trap 'echo "Error occurred on line $LINENO"' ERR
+        mkdir -p leaks
 
-        [[ -z "${AIAPIURL:-}" ]] && echo "AIAPIURL is not set" && exit 2
-        [[ -z "${AIAPIKEY:-}" ]] && echo "AIAPIKEY is not set" && exit 2
-
-        echo "Starting per-file secret scan..."
         LEAK_FILES=()
-        JQ_FAILED_FILES=()
-        CURL_FAILED_FILES=()
-
         while IFS= read -r FILE; do
-          if [ ! -f "$FILE" ]; then
-            echo "Skipping missing file: $FILE"
-            continue
-          fi
+          [ -f "$FILE" ] || continue
           echo "Scanning: $FILE"
 
           CONTENT=$(jq -Rs . < "$FILE")
-
           PAYLOAD=$(jq -n \
             --arg model "openai/gpt-4o-mini" \
             --arg ignore "$IGNORE" \
@@ -107,11 +89,8 @@ jobs:
             }')
 
           echo "$PAYLOAD" > payload.json
-          if ! jq . payload.json > /dev/null 2> jq_error.log; then
-            echo "Malformed payload JSON for $FILE"
-            cat jq_error.log
-            cat payload.json
-            JQ_FAILED_FILES+=("$FILE")
+          if ! jq . payload.json > /dev/null; then
+            echo "Malformed JSON for $FILE"
             continue
           fi
 
@@ -119,36 +98,96 @@ jobs:
             -H "Authorization: Bearer $AIAPIKEY" \
             -H "Content-Type: application/json" \
             -d @payload.json > response.json; then
-              echo "curl request failed for $FILE"
-              cat response.json || echo "(No response received)"
-              CURL_FAILED_FILES+=("$FILE")
+              echo "curl failed for $FILE"
               continue
           fi
 
           RESPONSE=$(jq -r '.choices[0].message.content' response.json)
           SCORE=$(echo "$RESPONSE" | grep -o '[0-9]\+' | head -n1)
-          echo "[$FILE] -> Score: $SCORE"
 
           if [ "$SCORE" -ge 50 ]; then
-            echo "Secret risk in file: $FILE (score: $SCORE)"
-            echo -e "Reason:\n$RESPONSE"
+            echo "$FILE" >> leaks/leak_files.txt
+            echo "$RESPONSE" > leaks/"$(echo "$FILE" | sed 's/\//_/g')".expl
             LEAK_FILES+=("$FILE")
+            echo "Secret risk in file: $FILE (score: $SCORE)"
           fi
         done < file_list.txt
 
-        echo ""
-        echo "Summary Report:"
-        [ "${#LEAK_FILES[@]}" -ne 0 ] && echo " Files with secret risk: ${LEAK_FILES[*]}"
-        [ "${#JQ_FAILED_FILES[@]}" -ne 0 ] && echo "  Files with malformed JSON: ${JQ_FAILED_FILES[*]}"
-        [ "${#CURL_FAILED_FILES[@]}" -ne 0 ] && echo "  Files with failed curl requests: ${CURL_FAILED_FILES[*]}"
-
-        if [ "${#LEAK_FILES[@]}" -ne 0 ]; then
-          exit 1
-        elif [ "${#JQ_FAILED_FILES[@]}" -ne 0 ]; then
-          exit 2
-        elif [ "${#CURL_FAILED_FILES[@]}" -ne 0 ]; then
-          exit 3
+    - name: Save leak status
+      id: set-output
+      run: |
+        if [ -s leaks/leak_files.txt ]; then
+          echo "leak_status=found" >> $GITHUB_OUTPUT
         else
-          echo "All files scanned successfully. No issues found."
-          exit 0
+          echo "leak_status=clean" >> $GITHUB_OUTPUT
         fi
+
+    - name: Upload leak artifacts
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: leak-files
+        path: leaks/
+
+  report-leaks:
+    runs-on: ubuntu-latest
+    needs: scan
+    if: needs.scan.outputs.leak_status == 'found'
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+
+    - name: Download leaked files
+      uses: actions/download-artifact@v3
+      with:
+        name: leak-files
+        path: leaks
+
+    - name: Generate SARIF report
+      run: |
+        mkdir -p results
+        echo '{
+          "version": "2.1.0",
+          "runs": [{
+            "tool": {
+              "driver": {
+                "name": "LLM Secret Scanner",
+                "rules": [{
+                  "id": "secret-leak",
+                  "name": "Potential Secret Detected",
+                  "shortDescription": { "text": "Secret detected by AI scan" },
+                  "fullDescription": { "text": "A file was flagged as potentially containing a secret." },
+                  "defaultConfiguration": { "level": "error" }
+                }]
+              }
+            },
+            "results": [' > results/results.sarif
+
+        FIRST=1
+        while IFS= read -r FILE; do
+          F_ESC=$(echo "$FILE" | sed 's/\//_/g')
+          EXPL=$(jq -Rs . < leaks/"$F_ESC".expl)
+
+          [ $FIRST -eq 0 ] && echo "," >> results/results.sarif
+          FIRST=0
+
+          echo "{
+            \"ruleId\": \"secret-leak\",
+            \"level\": \"error\",
+            \"message\": { \"text\": $EXPL },
+            \"locations\": [{
+              \"physicalLocation\": {
+                \"artifactLocation\": { \"uri\": \"$FILE\" },
+                \"region\": { \"startLine\": 1 }
+              }
+            }]
+          }" >> results/results.sarif
+        done < leaks/leak_files.txt
+
+        echo "] }] }" >> results/results.sarif
+
+    - name: Upload SARIF to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: results/results.sarif
