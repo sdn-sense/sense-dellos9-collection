@@ -44,7 +44,7 @@ jobs:
             echo "Loaded .leakignore from base branch"
           else
             echo ".leakignore not found in base branch; downloading from fallback URL"
-            curl -sfL https://raw.githubusercontent.com/sdn-sense/default-actions/main/leakignore -o .leakignore || echo "" > .leakignore
+            curl -sfL https://raw.githubusercontent.com/sdn-sense/default-actions/refs/heads/master/leakignore -o .leakignore || echo "" > .leakignore
           fi
         fi
 
