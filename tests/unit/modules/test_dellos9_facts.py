@@ -133,6 +133,44 @@ class TestDellOS9Facts(TestDellOS9Module):
             test_data["ansible_net_ipv6"], ansible_facts["ansible_net_ipv6"]
         )
 
+    def test_subsets_run_in_deterministic_order(self):
+        """gather_subset=all must always run default -> lldp -> routing,
+        regardless of set iteration order."""
+        set_module_args({"gather_subset": "all"})
+        result = self.execute_module()
+
+        self.assertEqual(
+            result["ansible_facts"]["ansible_net_gather_subset"],
+            [["default", "lldp", "routing"]],
+        )
+        first = [c.args[1][0] for c in self.run_commands.call_args_list]
+        self.assertEqual(
+            first,
+            ["show interfaces", "show lldp neighbors detail", "show running-config"],
+        )
+
+    def test_subset_config_disables_routing(self):
+        """subset_config={'routing': false} drops the routing subset; the
+        others still run, in order."""
+        set_module_args(
+            {"gather_subset": "all", "subset_config": {"routing": False}}
+        )
+        result = self.execute_module()
+        ansible_facts = result["ansible_facts"]
+
+        self.assertEqual(
+            ansible_facts["ansible_net_gather_subset"], [["default", "lldp"]]
+        )
+        self.assertNotIn("ansible_net_ipv4", ansible_facts)
+
+    def test_subset_config_unknown_key_fails(self):
+        """A typo'd subset name must fail loudly, not be silently ignored."""
+        set_module_args(
+            {"gather_subset": "all", "subset_config": {"routng": False}}
+        )
+        result = self.execute_module(failed=True)
+        self.assertIn("unknown subset", result["msg"])
+
     def test_dellos9_facts_gather_subset_lldp(self):
         set_module_args({"gather_subset": "lldp"})
         result = self.execute_module()
