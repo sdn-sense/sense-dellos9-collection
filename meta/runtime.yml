@@ -6,3 +6,5 @@ plugin_routing:
       redirect: sense.dellos9.dellos9
     dellos9_command:
       redirect: sense.dellos9.dellos9
+    dellos9_bgpsummary:
+      redirect: sense.dellos9.dellos9
