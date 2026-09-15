@@ -79,19 +79,20 @@ def parseLocalAsn(summarytext):
 
 
 @functionwrapper
-def parseNeighborsText(neighborstext, iptype, localasn, peers):
+def parseNeighborsText(neighborstext, localasn, peersbyaddr):
     """Parse 'neighbors' output, appending one normalized peer per block."""
     blocks = re.split(r"(?=^BGP neighbor is )", neighborstext, flags=re.M)
     for block in blocks:
         headermatch = re.search(r"^BGP neighbor is ([^\s,]+),\s*remote AS (\d+)", block, re.M)
         if not headermatch:
             continue
+        peeraddr = headermatch.group(1)
         statematch = re.search(r"BGP state (\S+),\s*in this state for (\S+)", block)
         acceptedmatch = re.search(r"Prefixes accepted (\d+)", block)
         advertisedmatch = re.search(r"Prefixes advertised (\d+)", block)
-        peers.append({
-            "peer": headermatch.group(1),
-            "iptype": iptype,
+        peersbyaddr[peeraddr] = {
+            "peer": peeraddr,
+            "iptype": "ipv6" if ":" in peeraddr else "ipv4",
             "local_asn": localasn,
             "remote_asn": int(headermatch.group(2)),
             "state": normalizeBgpState(statematch.group(1) if statematch else ""),
@@ -99,7 +100,7 @@ def parseNeighborsText(neighborstext, iptype, localasn, peers):
             "prefixes_received": int(acceptedmatch.group(1)) if acceptedmatch else None,
             "prefixes_advertised": int(advertisedmatch.group(1)) if advertisedmatch else None,
             "advertised_known": True,
-        })
+        }
 
 
 @functionwrapper
@@ -120,7 +121,7 @@ def main():
     wanttype = module.params["type"]
     wantafis = ["ipv4", "ipv6"] if wanttype == "both" else [wanttype]
 
-    peers = []
+    peersbyaddr = {}
     localasn = None
     for iptype in wantafis:
         summaryresp = run_commands(module, [buildCommand(vrf, iptype, "summary")])
@@ -128,9 +129,9 @@ def main():
         thisasn = parseLocalAsn(summaryresp[0] if summaryresp else "")
         if thisasn is not None:
             localasn = thisasn
-        parseNeighborsText(neighborsresp[0] if neighborsresp else "", iptype, localasn, peers)
+        parseNeighborsText(neighborsresp[0] if neighborsresp else "", localasn, peersbyaddr)
 
-    bgp_summary = {"vrf": vrf or None, "afi_checked": wantafis, "peers": peers}
+    bgp_summary = {"vrf": vrf or None, "afi_checked": wantafis, "peers": list(peersbyaddr.values())}
 
     module.exit_json(changed=False, warnings=warnings, bgp_summary=bgp_summary)
 
